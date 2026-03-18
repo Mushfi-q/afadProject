@@ -57,51 +57,80 @@ def predict_audio(audio_path, original_filename=None, model=None):
         # signal, fs = torchaudio.load(audio_path)
         # embeddings = active_model.encode_batch(signal)
         
-        # --- NEW: Signal-Based Detection (Data-Driven) ---
-        # Instead of keywords, we analyze the acoustic signal properties.
-        import soundfile as sf
+        # --- UPGRADED: Weighted Acoustic Scoring (Multi-Factor) ---
+        import librosa
+        import numpy as np
         
-        # Load the audio using soundfile for better environment compatibility
-        data, sample_rate = sf.read(audio_path)
-        waveform = torch.tensor(data).float()
+        print(f"[*] Analyzing audio signal: {os.path.basename(audio_path)}")
         
-        # Convert to mono if stereo
-        if len(waveform.shape) > 1:
-            waveform = torch.mean(waveform, dim=1, keepdim=True).t()
+        # Load audio (16kHz mono)
+        y, sr = librosa.load(audio_path, sr=16000)
+        
+        # FEATURE EXTRACTION
+        rms = librosa.feature.rms(y=y)[0]
+        energy_variance = np.var(rms)
+        
+        flatness = librosa.feature.spectral_flatness(y=y)[0]
+        mean_flatness = np.mean(flatness)
+        
+        cent = librosa.feature.spectral_centroid(y=y, sr=sr)[0]
+        mean_centroid = np.mean(cent)
+        
+        zcr_series = librosa.feature.zero_crossing_rate(y=y)[0]
+        zcr_var = np.var(zcr_series)
+        
+        contrast = librosa.feature.spectral_contrast(y=y, sr=sr)
+        mean_contrast = np.mean(contrast)
+        
+        rolloff = np.mean(librosa.feature.spectral_rolloff(y=y, sr=sr))
+
+        print(f"    - Metrics: Var={energy_variance:.6f}, Flat={mean_flatness:.6f}, ZCRv={zcr_var:.6f}, Cont={mean_contrast:.2f}, Roll={rolloff:.0f}")
+
+        # WEIGHTED SCORING
+        score = 0
+        reasons = []
+        
+        # 1. Spectral Flatness (Strong marker for vocoders)
+        if mean_flatness > 0.08:
+            score += 50
+            reasons.append("High Spectral Flatness (Vocoder Artifacts)")
+        elif mean_flatness > 0.06:
+            score += 25
+            reasons.append("Elevated Spectral Flatness")
+            
+        # 2. Energy Variance (Dynamics)
+        if energy_variance > 0.0045: 
+            score += 30
+            reasons.append("High Energy Fluctuations (Inconsistent Gain)")
+        elif energy_variance < 0.0001:
+            score += 40
+            reasons.append("Unnatural Robotic Stability (Extreme Low Var)")
+            
+        # 3. ZCR Variance (Temporal Dynamics)
+        if zcr_var < 0.007:
+            score += 20
+            reasons.append("Low Temporal Variety (ZCR Stability)")
+            
+        # 4. Spectral Contrast (Deepfakes in this set exhibit higher mean contrast)
+        if mean_contrast > 21.8:
+            score += 15
+            reasons.append("Unnatural Spectral Contrast")
+            
+        # 5. NEGATIVE CUE: High Spectral Rolloff (Strong indicator of Real high-quality speech)
+        if rolloff > 3600:
+            score -= 30
+            reasons.append("Natural Harmonic Roll-off (likely Real)")
+
+        # DECISION
+        threshold = 60
+        is_fake = score >= threshold
+        result = 'fake' if is_fake else 'real'
+        
+        if is_fake:
+            print(f"[!] DETECTED FAKE (Score: {score}/{threshold}): {', '.join(reasons)}")
         else:
-            waveform = waveform.unsqueeze(0)
-            
-        # Calculate Energy Variance
-        # We calculate the RMS energy in small windows
-        window_size = 1024
-        hop_length = 512
-        
-        # Pad waveform for windowing
-        pad_size = window_size // 2
-        padded_waveform = torch.nn.functional.pad(waveform, (pad_size, pad_size))
-        
-        # Extract windows
-        windows = padded_waveform.unfold(-1, window_size, hop_length)
-        
-        # Compute RMS energy per window
-        rms_energy = torch.sqrt(torch.mean(windows**2, dim=-1))
-        
-        # Normalize energy
-        if torch.max(rms_energy) > 0:
-            rms_energy = rms_energy / torch.max(rms_energy)
-            
-        energy_variance = torch.var(rms_energy).item()
-        
-        # TUNED Threshold based on dataset calibration:
-        # Real samples typically have Variance < 0.050
-        # Synthetic/Artifacted samples in this dataset often have Variance > 0.050
-        threshold = 0.050 
-        
-        if energy_variance < threshold:
-            result = 'real'
-        else:
-            result = 'fake'
-            
+            print(f"[+] VERIFIED REAL (Score: {score}/{threshold}): Signal appears natural.")
+
         # --- NEW: Logging ---
         try:
             current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -114,8 +143,9 @@ def predict_audio(audio_path, original_filename=None, model=None):
                 f.write(f"[{timestamp}] Audio Analysis: {os.path.basename(audio_path)}\n")
                 if original_filename and original_filename != os.path.basename(audio_path):
                     f.write(f"Original Name: {original_filename}\n")
-                f.write(f"Signal Variance: {energy_variance:.6f} | Threshold: {threshold}\n")
-                f.write(f"Result: {result} (Acoustic Feature Detection)\n")
+                f.write(f"Metrics -> Var: {energy_variance:.6f}, Flat: {mean_flatness:.6f}, Cent: {mean_centroid:.2f}\n")
+                f.write(f"Result: {result} | Detection: Multi-Factor Acoustic\n")
+                if is_fake: f.write(f"Reasons: {', '.join(reasons)}\n")
                 f.write("-" * 50 + "\n")
         except Exception as log_error:
             print(f"Log Error: {log_error}")

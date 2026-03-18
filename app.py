@@ -35,6 +35,7 @@ except ImportError:
 def get_voice_model():
     """Cache the SpeechBrain model to avoid redundant loading."""
     from scripts.load_model import load_deepfake_model
+    print("[*] Accessing SpeechBrain model from memory...")
     return load_deepfake_model(silent=True)
 
 # --- Page Configuration ---
@@ -85,6 +86,7 @@ with tab1:
             st.warning("Please enter some text to analyze.")
         else:
             with st.spinner("Analyzing psychological cues..."):
+                print(f"[*] Processing Text Analysis...")
                 label, risk = predict_text(text_input)
                 
                 # Display Results
@@ -108,12 +110,25 @@ with tab2:
     st.header("AI Voice Deepfake Detection")
     st.info("Upload a .wav file to verify if the voice is real or AI-generated.")
     
+    # --- Audio Upload & Persistence ---
     audio_file = st.file_uploader("Upload Audio (.wav)", type=["wav"])
     
+    # Initialize session state for audio
+    if 'audio_result' not in st.session_state:
+        st.session_state.audio_result = None
+    if 'last_audio_name' not in st.session_state:
+        st.session_state.last_audio_name = None
+
     if audio_file is not None:
+        # Reset result if a DIFFERENT file is uploaded
+        if audio_file.name != st.session_state.last_audio_name:
+            st.session_state.audio_result = None
+            st.session_state.last_audio_name = audio_file.name
+            
         st.audio(audio_file)
         
         if st.button("Verify Audio"):
+            print(f"[*] Processing Audio Analysis: {audio_file.name}")
             with st.spinner("Analyzing spectral features..."):
                 # Save to temp file
                 with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as tmp_file:
@@ -123,29 +138,49 @@ with tab2:
                 try:
                     voice_model = get_voice_model()
                     result = run_voice_prediction(tmp_path, original_filename=audio_file.name, model=voice_model)
-                    
-                    st.subheader("Results")
-                    if result == "fake":
-                        st.error("🚨 DETECTED: This audio is likely AI-GENERATED (FAKE).")
-                    elif result == "real":
-                        st.success("✅ VERIFIED: This audio is likely REAL.")
-                    else:
-                        st.warning(f"Result: {result}")
+                    st.session_state.audio_result = result # Persist!
                 finally:
                     if os.path.exists(tmp_path):
                         os.remove(tmp_path)
+        
+        # Display persistent result
+        if st.session_state.audio_result:
+            result = st.session_state.audio_result
+            st.subheader("Results")
+            if result == "fake":
+                st.error("🚨 DETECTED: This audio is likely AI-GENERATED (FAKE).")
+            elif result == "real":
+                st.success("✅ VERIFIED: This audio is likely REAL.")
+            else:
+                st.warning(f"Result: {result}")
+    else:
+        st.session_state.audio_result = None
+        st.session_state.last_audio_name = None
 
 # --- 3. Video Analysis ---
 with tab3:
     st.header("Visual Deepfake & Face Swap Detection")
     st.info("Upload an .mp4 video to check for facial manipulations using XceptionNet.")
     
+    # --- Video Upload & Persistence ---
     video_file = st.file_uploader("Upload Video (.mp4)", type=["mp4"])
     
+    # Initialize session state for video
+    if 'video_result' not in st.session_state:
+        st.session_state.video_result = None
+    if 'last_video_name' not in st.session_state:
+        st.session_state.last_video_name = None
+
     if video_file is not None:
+        # Reset result if a DIFFERENT file is uploaded
+        if video_file.name != st.session_state.last_video_name:
+            st.session_state.video_result = None
+            st.session_state.last_video_name = video_file.name
+            
         st.video(video_file)
         
         if st.button("Scan Video"):
+            print(f"[*] Processing Video Analysis: {video_file.name}")
             with st.spinner("Extracting frames and analyzing faces (this may take a moment)..."):
                 # Save to temp file
                 with tempfile.NamedTemporaryFile(delete=False, suffix=".mp4") as tmp_file:
@@ -154,29 +189,35 @@ with tab3:
                 
                 try:
                     prediction, prob, count = run_video_prediction(tmp_path, original_filename=video_file.name, max_frames=50)
-                    
-                    st.subheader("Results")
-                    col1, col2 = st.columns(2)
-                    
-                    with col1:
-                        color = "red" if prediction == "DEEPFAKE" else "green"
-                        st.markdown(f"### Result: <span style='color:{color}'>{prediction}</span>", unsafe_allow_html=True)
-                    
-                    with col2:
-                        st.metric("Confidence Score", f"{prob:.2f}")
-                    
-                    st.write(f"Analyzed {count} faces across extracted frames.")
-                    
-                    if prediction == "DEEPFAKE":
-                        st.error("🚨 WARNING: High probability of facial manipulation detected.")
-                    else:
-                        st.success("✅ CLEAR: No significant signs of deepfake manipulation found.")
-                        
+                    st.session_state.video_result = (prediction, prob, count) # Persist!
                 except Exception as e:
                     st.error(f"Error during video processing: {e}")
                 finally:
                     if os.path.exists(tmp_path):
                         os.remove(tmp_path)
+
+        # Display persistent result
+        if st.session_state.video_result:
+            prediction, prob, count = st.session_state.video_result
+            st.subheader("Results")
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                color = "red" if prediction == "DEEPFAKE" else "green"
+                st.markdown(f"### Result: <span style='color:{color}'>{prediction}</span>", unsafe_allow_html=True)
+            
+            with col2:
+                st.metric("Confidence Score", f"{prob:.2f}")
+            
+            st.write(f"Analyzed {count} faces across extracted frames.")
+            
+            if prediction == "DEEPFAKE":
+                st.error("🚨 WARNING: High probability of facial manipulation detected.")
+            else:
+                st.success("✅ CLEAR: No significant signs of deepfake manipulation found.")
+    else:
+        st.session_state.video_result = None
+        st.session_state.last_video_name = None
 
 # --- Footer ---
 st.divider()

@@ -26,8 +26,8 @@ def load_deepfake_model(silent=False):
     """
     Loads the pretrained deepfake detection model from SpeechBrain.
     """
-    if not silent:
-        print(f"Loading pretrained model from: {MODEL_SOURCE}...")
+    # Always print to terminal for visibility in the backend
+    print(f"[*] Loading pretrained SpeechBrain model: {MODEL_SOURCE}...")
     
     # We create a savedir to cache the downloaded model weights
     save_dir = "models/pretrained_ecapa"
