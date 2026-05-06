@@ -1,8 +1,8 @@
 import pandas as pd
 try:
-    from features.cue_dictionary import FAMILIARITY_CUES, URGENCY_CUES, EMOTIONAL_CUES, AUTHORITY_CUES
+    from features.cue_dictionary import FAMILIARITY_CUES, URGENCY_CUES, EMOTIONAL_CUES, AUTHORITY_CUES, MONEY_TERMS, URGENCY_TERMS, PAYMENT_TERMS
 except ImportError:
-    from cue_dictionary import FAMILIARITY_CUES, URGENCY_CUES, EMOTIONAL_CUES, AUTHORITY_CUES
+    from cue_dictionary import FAMILIARITY_CUES, URGENCY_CUES, EMOTIONAL_CUES, AUTHORITY_CUES, MONEY_TERMS, URGENCY_TERMS, PAYMENT_TERMS
 
 def count_cues(text, cue_list):
     """
@@ -17,6 +17,30 @@ def count_cues(text, cue_list):
         if cue.lower() in text_lower:
             count += 1
     return count
+
+def check_any_cue(text, cue_list):
+    """
+    Returns 1 if any cue from the list appears in the text, else 0.
+    """
+    if not isinstance(text, str):
+        return 0
+    
+    text_lower = text.lower()
+    for cue in cue_list:
+        if cue.lower() in text_lower:
+            return 1
+    return 0
+
+def extract_keyword_flags(df):
+    """
+    Computes binary keyword flags for each message.
+    Used for Phase 2.1 & 2.2.
+    """
+    df_flags = pd.DataFrame()
+    df_flags['has_money_term'] = df['message'].apply(lambda x: check_any_cue(x, MONEY_TERMS))
+    df_flags['has_urgency'] = df['message'].apply(lambda x: check_any_cue(x, URGENCY_TERMS))
+    df_flags['has_payment_term'] = df['message'].apply(lambda x: check_any_cue(x, PAYMENT_TERMS))
+    return df_flags
 
 def extract_custom_features(df):
     """

@@ -21,7 +21,8 @@ URGENCY_CUES = [
     "right now",
     "quickly",
     "now",
-    "today"
+    "today",
+    "fast"
 ]
 
 EMOTIONAL_CUES = [
@@ -38,4 +39,17 @@ AUTHORITY_CUES = [
     "police officer",
     "hr department",
     "manager here"
+]
+
+# NEW: Phase 2.2 Keyword Lists
+MONEY_TERMS = [
+    "lakh", "crore", "rs", "rupees", "cash", "money", "amount"
+]
+
+URGENCY_TERMS = [
+    "urgent", "asap", "immediately", "fast", "now"
+]
+
+PAYMENT_TERMS = [
+    "gpay", "phonepe", "paytm", "upi"
 ]

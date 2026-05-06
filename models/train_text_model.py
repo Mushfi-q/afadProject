@@ -4,7 +4,12 @@ import os
 
 from sklearn.feature_extraction.text import TfidfVectorizer
 from scipy.sparse import hstack
-from AFAD_Project.features.custom_feature_extractor import extract_custom_features
+
+KEYWORD_FLAG_COLUMNS = [
+    'has_money_term',
+    'has_urgency',
+    'has_payment_term',
+]
 
 def vectorize_text(X_train, X_test):
     """
@@ -44,14 +49,23 @@ def vectorize_text(X_train, X_test):
     
     return X_train_tfidf, X_test_tfidf, vectorizer
 
-def combine_features(tfidf_matrix, custom_features_df):
+def extract_keyword_flags(df):
     """
-    Step 4.5: Combine TF-IDF + Psychological Features
-    Merges Sparse TF-IDF matrix with dense psychological counters.
+    Extracts the keyword flag features added during Phase 2.1.
     """
-    print("Combining TF-IDF and psychological features...")
-    # Convert custom features to sparse format and stack with TF-IDF
-    combined_matrix = hstack([tfidf_matrix, custom_features_df.values])
+    missing_columns = [col for col in KEYWORD_FLAG_COLUMNS if col not in df.columns]
+    if missing_columns:
+        raise ValueError(f"Missing keyword flag columns: {missing_columns}")
+
+    return df[KEYWORD_FLAG_COLUMNS].astype(int)
+
+def combine_features(tfidf_matrix, keyword_flags_df):
+    """
+    Step 2.4: Combine TF-IDF + Keyword Flag Features.
+    Merges sparse TF-IDF text features with dense binary keyword flags.
+    """
+    print("Combining TF-IDF and keyword flag features...")
+    combined_matrix = hstack([tfidf_matrix, keyword_flags_df.values])
     print(f"Feature combination complete. Final shape: {combined_matrix.shape}")
     return combined_matrix
 
@@ -68,24 +82,31 @@ def load_split_data():
     train_df = pd.read_csv(train_path)
     test_df = pd.read_csv(test_path)
     
-    return train_df['message'], test_df['message'], train_df['label'], test_df['label']
+    return train_df, test_df
 
 if __name__ == "__main__":
     try:
         # Step 1 & 2: Load Pre-split Data
-        X_train, X_test, y_train, y_test = load_split_data()
+        train_df, test_df = load_split_data()
+        X_train = train_df['message']
+        X_test = test_df['message']
+        y_train = train_df['label']
+        y_test = test_df['label']
         
         # Step 4.2: Convert Text to TF-IDF Features
         X_train_tfidf, X_test_tfidf, vectorizer = vectorize_text(X_train, X_test)
         
-        # Step 4.4 & 4.5: Extract and Combine Psychological Features
-        print("\n--- Extracting Psychological Features ---")
-        train_custom = extract_custom_features(pd.DataFrame(X_train, columns=['message']))
-        test_custom = extract_custom_features(pd.DataFrame(X_test, columns=['message']))
+        # Step 2.4: Extract and Combine Keyword Flag Features
+        print("\n--- Extracting Keyword Flag Features ---")
+        train_keyword_flags = extract_keyword_flags(train_df)
+        test_keyword_flags = extract_keyword_flags(test_df)
         
         # Combine Step
-        X_train_final = combine_features(X_train_tfidf, train_custom)
-        X_test_final = combine_features(X_test_tfidf, test_custom)
+        X_train_final = combine_features(X_train_tfidf, train_keyword_flags)
+        X_test_final = combine_features(X_test_tfidf, test_keyword_flags)
+        print(f"TF-IDF features: {X_train_tfidf.shape[1]}")
+        print(f"Keyword flag features: {len(KEYWORD_FLAG_COLUMNS)}")
+        print(f"Expected final features: {X_train_tfidf.shape[1] + len(KEYWORD_FLAG_COLUMNS)}")
         
         # Step 9: Inspect Important Features
         print("\nInspecting sampled feature names (learned vocabulary):")

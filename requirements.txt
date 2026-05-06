@@ -11,3 +11,4 @@ pandas
 soundfile
 numpy
 tqdm
+scikit-learn

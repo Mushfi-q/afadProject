@@ -3,7 +3,13 @@ import joblib
 import os
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import classification_report, accuracy_score, confusion_matrix
-from AFAD_Project.models.train_text_model import load_split_data, vectorize_text, combine_features
+from AFAD_Project.models.train_text_model import (
+    KEYWORD_FLAG_COLUMNS,
+    combine_features,
+    extract_keyword_flags,
+    load_split_data,
+    vectorize_text,
+)
 
 def train_afad_model(X_train_final, y_train):
     """
@@ -37,29 +43,19 @@ def evaluate_model(model, X_test_vec, y_test):
 
 if __name__ == "__main__":
     try:
-        # Step 5.3: Load the High-Quality Re-Cleaned Dataset (No Headers)
-        dataset_path = "data/final_afad_dataset_cleaned.csv"
-        df = pd.read_csv(dataset_path)
+        # Step 5.3: Load the pre-split datasets with keyword flags.
+        train_df, test_df = load_split_data()
         
-        print("Dataframe Head:")
-        print(df[['message', 'label']].head())
+        print("Training Dataframe Head:")
+        print(train_df[['message', 'label'] + KEYWORD_FLAG_COLUMNS].head())
         print("\nClass Distribution:")
-        print(df['label'].value_counts())
+        print(train_df['label'].value_counts())
         
         # Step 5.4: Split Features and Labels
-        X = df["message"]
-        y = df["label"]
-        
-        # Step 5.5: Train/Test Split
-        # 80% training, 20% testing with stratification
-        from sklearn.model_selection import train_test_split
-        print("\n--- Step 5.5: Stratified Train/Test Split (80/20) ---")
-        X_train, X_test, y_train, y_test = train_test_split(
-            X, y,
-            test_size=0.2,
-            random_state=42,
-            stratify=y
-        )
+        X_train = train_df["message"]
+        X_test = test_df["message"]
+        y_train = train_df["label"]
+        y_test = test_df["label"]
         
         print(f"Training set size: {len(X_train)}")
         print(f"Testing set size: {len(X_test)}")
@@ -67,14 +63,16 @@ if __name__ == "__main__":
         # 2. Vectorize (TF-IDF)
         X_train_tfidf, X_test_tfidf, vectorizer = vectorize_text(X_train, X_test)
         
-        # 3. Extract Psychological Features
-        from AFAD_Project.features.custom_feature_extractor import extract_custom_features
-        train_custom = extract_custom_features(pd.DataFrame(X_train, columns=['message']))
-        test_custom = extract_custom_features(pd.DataFrame(X_test, columns=['message']))
+        # 3. Extract Keyword Flag Features
+        train_keyword_flags = extract_keyword_flags(train_df)
+        test_keyword_flags = extract_keyword_flags(test_df)
         
         # 4. Combine Features
-        X_train_final = combine_features(X_train_tfidf, train_custom)
-        X_test_final = combine_features(X_test_tfidf, test_custom)
+        X_train_final = combine_features(X_train_tfidf, train_keyword_flags)
+        X_test_final = combine_features(X_test_tfidf, test_keyword_flags)
+        print(f"TF-IDF features: {X_train_tfidf.shape[1]}")
+        print(f"Keyword flag features: {len(KEYWORD_FLAG_COLUMNS)}")
+        print(f"Expected final features: {X_train_tfidf.shape[1] + len(KEYWORD_FLAG_COLUMNS)}")
         
         # 5. Train
         model = train_afad_model(X_train_final, y_train)
