@@ -9,6 +9,9 @@ import torch
 import sys
 import contextlib
 
+# Disable symlinks for Windows HuggingFace compatibility (Fixes WinError 1314)
+os.environ["HF_HUB_DISABLE_SYMLINKS"] = "1"
+
 # Suppress SpeechBrain backend warnings during import
 with contextlib.redirect_stderr(open(os.devnull, 'w')):
     try:
@@ -25,19 +28,37 @@ MODEL_SOURCE = "speechbrain/spkrec-ecapa-voxceleb"
 def load_deepfake_model(silent=False):
     """
     Loads the pretrained deepfake detection model from SpeechBrain.
+    Uses a robust local download strategy to avoid Windows symlink issues.
     """
-    # Always print to terminal for visibility in the backend
-    print(f"[*] Loading pretrained SpeechBrain model: {MODEL_SOURCE}...")
+    try:
+        import huggingface_hub
+        from huggingface_hub import constants
+        # Force disable symlinks at the library level
+        constants.HF_HUB_DISABLE_SYMLINKS = True
+    except ImportError:
+        pass
     
     # We create a savedir to cache the downloaded model weights
-    save_dir = "models/pretrained_ecapa"
+    save_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "models/pretrained_ecapa")
     os.makedirs(save_dir, exist_ok=True)
     
+    print(f"[*] Loading pretrained SpeechBrain model: {MODEL_SOURCE}...")
+    
     try:
-        model = EncoderClassifier.from_hparams(
-            source=MODEL_SOURCE
+        # Step 1: Use huggingface_hub to download the model to a local directory (forced copy)
+        import huggingface_hub
+        local_path = huggingface_hub.snapshot_download(
+            repo_id=MODEL_SOURCE,
+            local_dir=save_dir,
+            local_dir_use_symlinks=False
         )
-        print("Model loaded successfully!")
+        
+        # Step 2: Load the model from the local directory
+        model = EncoderClassifier.from_hparams(
+            source=local_path,
+            savedir=local_path
+        )
+        print("Model loaded successfully from local cache!")
         return model
     except Exception as e:
         print(f"Error loading model: {e}")

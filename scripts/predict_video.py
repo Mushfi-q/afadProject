@@ -8,9 +8,20 @@ project_root = os.path.dirname(current_dir)
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
-from extract_frames import extract_frames
-from detect_faces import detect_and_preprocess_face
-from load_video_model import load_video_deepfake_model
+# Add current directory to python path to find local modules
+current_dir = os.path.dirname(os.path.abspath(__file__))
+if current_dir not in sys.path:
+    sys.path.insert(0, current_dir)
+
+# Robust imports for local modules
+try:
+    from extract_frames import extract_frames
+    from detect_faces import detect_and_preprocess_face
+    from load_video_model import load_video_deepfake_model
+except ImportError:
+    from scripts.extract_frames import extract_frames
+    from scripts.detect_faces import detect_and_preprocess_face
+    from scripts.load_video_model import load_video_deepfake_model
 
 def predict_video(video_path, original_filename=None, max_frames=50, temp_frame_dir="temp/frames", temp_face_dir="temp/faces"):
     """

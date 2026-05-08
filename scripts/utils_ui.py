@@ -27,17 +27,35 @@ except ImportError:
     sys.path.append(project_root)
     from features.custom_feature_extractor import extract_custom_features, extract_keyword_flags
 # Try flexible imports for other scripts in the same folder
-try:
+# --- LAZY LOADING MODULES ---
+
+def run_voice_prediction(audio_path, original_filename=None, model=None):
+    """
+    Lazy loads audio prediction module and runs it.
+    """
     try:
-        from predict_audio import predict_audio
-        from predict_video import predict_video
-    except ImportError:
-        from scripts.predict_audio import predict_audio
-        from scripts.predict_video import predict_video
-except Exception as e:
-    print(f"Warning: Audio/Video prediction dependencies not fully loaded: {e}")
-    def predict_audio(*args, **kwargs): return "Error: Audio deps missing", 0.0
-    def predict_video(*args, **kwargs): return "Error: Video deps missing", 0.0, 0
+        try:
+            from predict_audio import predict_audio
+        except ImportError:
+            from scripts.predict_audio import predict_audio
+        return predict_audio(audio_path, original_filename=original_filename, model=model)
+    except Exception as e:
+        print(f"Warning: Audio prediction failed: {e}")
+        return "Error: Audio module unavailable", 0.0
+
+def run_video_prediction(video_path, original_filename=None, max_frames=50):
+    """
+    Lazy loads video prediction module and runs it.
+    """
+    try:
+        try:
+            from predict_video import predict_video
+        except ImportError:
+            from scripts.predict_video import predict_video
+        return predict_video(video_path, original_filename=original_filename, max_frames=max_frames)
+    except Exception as e:
+        print(f"Warning: Video prediction failed: {e}")
+        return "Error: Video module unavailable", 0.0, 0
 
 # --- TEXT PREPROCESSING ---
 
@@ -151,16 +169,4 @@ def predict_text_batch(messages):
         results.append(predict_text(msg))
     return results
 
-# --- WRAPPER FOR STREAMLIT ---
-
-def run_voice_prediction(audio_path, original_filename=None, model=None):
-    """
-    Wrapper for voice prediction to be used in UI.
-    """
-    return predict_audio(audio_path, original_filename=original_filename, model=model)
-
-def run_video_prediction(video_path, original_filename=None, max_frames=50):
-    """
-    Wrapper for video prediction to be used in UI.
-    """
-    return predict_video(video_path, original_filename=original_filename, max_frames=max_frames)
+# --- END OF UTILS ---

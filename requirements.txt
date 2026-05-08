@@ -12,3 +12,5 @@ soundfile
 numpy
 tqdm
 scikit-learn
+librosa
+torchvision==0.17.2

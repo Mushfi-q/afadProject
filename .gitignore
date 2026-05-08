@@ -17,3 +17,5 @@ afad_env/
 !voiceTrainingLog.txt
 !videoTrainingLog.txt
 scratch/
+users.db
+scripts/models/

@@ -32,11 +32,13 @@ def predict_audio(audio_path, original_filename=None, model=None):
         active_model = model
     else:
         if MODEL_INSTANCE is None:
+            # Try loading, but don't crash if it fails (lazy fallback)
             MODEL_INSTANCE = load_deepfake_model()
         active_model = MODEL_INSTANCE
         
     if active_model is None:
-        return "error_model_not_loaded"
+        print("[!] Warning: Deep Learning model not available. Falling back to Heuristic Acoustic Analysis.")
+        # We don't return here; we proceed to the librosa logic below
         
     try:
         # Run inference using the loaded model
